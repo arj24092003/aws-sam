@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Main SAM Template for managing all CRUD APIs
+
+Globals:
+  Function:
+    Timeout: 3
+    Runtime: nodejs20.x
+    Architectures:
+      - x86_64  # This is the default architecture for all functions
+
+Resources:
+  CreateFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: createAPI-AWS/lambda-function/
+      Handler: app.lambdaHandler
+      Events:
+        CreateAPI:
+          Type: Api 
+          Properties:
+            Path: /create
+            Method: post
+
+  DeleteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: deleteAPI-AWS/lambda-function/
+      Handler: app.lambdaHandler
+      Events:
+        DeleteAPI:
+          Type: Api
+          Properties:
+            Path: /delete/{id}
+            Method: delete
+
+  ReadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: readAPI-AWS/lambda-function/
+      Handler: app.lambdaHandler
+      Events:
+        ReadAPI:
+          Type: Api
+          Properties:
+            Path: /read
+            Method: get
+
+  UpdateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: updateAPI-AWS/lambda-function/
+      Handler: app.lambdaHandler
+      Events:
+        UpdateAPI:
+          Type: Api
+          Properties:
+            Path: /update/{id}
+            Method: patch
+
+Outputs:
+  CreateFunctionApi:
+    Description: "API Gateway endpoint URL for Prod stage for Create Function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/create/"
+
+  CreateFunction:
+    Description: "Create Lambda Function ARN"
+    Value: !GetAtt CreateFunction.Arn
+
+  CreateFunctionIamRole:
+    Description: "Implicit IAM Role created for Create function"
+    Value: !GetAtt CreateFunctionRole.Arn
+  
+  DeleteApi:
+    Description: "API Gateway endpoint URL for Prod stage for Delete function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/delete/"
+
+  DeleteFunction:
+    Description: "Delete Lambda Function ARN"
+    Value: !GetAtt DeleteFunction.Arn
+
+  DeleteFunctionIamRole:
+    Description: "Implicit IAM Role created for Delete function"
+    Value: !GetAtt DeleteFunctionRole.Arn
+
+  ReadApi:
+    Description: "API Gateway endpoint URL for Prod stage for Read function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/read/"
+
+  ReadFunction:
+    Description: "Read Lambda Function ARN"
+    Value: !GetAtt ReadFunction.Arn
+
+  ReadFunctionIamRole:
+    Description: "Implicit IAM Role created for Read function"
+    Value: !GetAtt ReadFunctionRole.Arn
+
+  UpdateApi:
+    Description: "API Gateway endpoint URL for Prod stage for Update function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/update/"
+
+  UpdateFunction:
+    Description: "Update Lambda Function ARN"
+    Value: !GetAtt UpdateFunction.Arn
+
+  UpdateFunctionIamRole:
+    Description: "Implicit IAM Role created for Update function"
+    Value: !GetAtt UpdateFunctionRole.Arn

@@ -1,0 +1,6 @@
+{
+  "pathParameters": {
+    "id": 1
+  },
+  "body": "{\"id\":6,\"name\":\"Joseph leaf\",\"position\":\"Software Developer\",\"department\":\"Engineering\",\"email\":\"joseph.leaf@example.com\"}"
+}
