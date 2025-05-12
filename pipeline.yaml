@@ -1,0 +1,94 @@
+trigger:
+  branches:
+    include:
+      - master
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  id: 'AJagadish'
+  url: 'https://github.com/arj24092003/aws-sam.git'
+  branch: 'master'
+  NVM_DIR: '$(HOME)/.nvm'
+
+stages:
+  - stage: CheckoutCode
+    jobs:
+      - job: Checkout
+        steps:
+          - task: Checkout@1
+            displayName: 'Checkout code'
+            inputs:
+              repository: 'self'
+              clean: true
+              persistCredentials: true
+
+  - stage: BuildProject
+    jobs:
+      - job: Build
+        steps:
+          - script: |
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+              nvm install 20
+              nvm use 20
+              which npm
+              npm -v
+              mkdir -p /tmp/sam-build
+              sam build --build-dir /tmp/sam-build
+            displayName: 'Build SAM application'
+          - script: 'zip -r build-aws.zip .aws-sam'
+            displayName: 'Archive build output'
+
+  - stage: PushToNexus
+    jobs:
+      - job: Upload
+        steps:
+          - task: NexusUploader@1
+            displayName: 'Upload to Nexus'
+            inputs:
+              nexusVersion: 'nexus3'
+              protocol: 'http'
+              nexusUrl: '18.140.153.140:8081'
+              repository: 'buildartifacts'
+              groupId: 'artifacts'
+              version: '09.09.2003'
+              artifactId: 'sam'
+              classifier: ''
+              file: 'build-aws.zip'
+              type: 'zip'
+
+  - stage: ConfigureAWS
+    jobs:
+      - job: AWSConfigure
+        steps:
+          - script: |
+              aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
+              aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+              aws configure set region "ap-southeast-1"
+            displayName: 'Configure AWS credentials'
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+
+  - stage: PullFromNexus
+    jobs:
+      - job: Download
+        steps:
+          - script: |
+              mkdir -p output-aws
+              curl -u $(NEXUS_USER):$(NEXUS_PASS) -O http://18.140.153.140:8081/repository/buildartifacts/artifacts/sam/09.09.2003/sam-09.09.2003.zip
+            displayName: 'Download from Nexus'
+            env:
+              NEXUS_USER: $(NEXUS_USER)
+              NEXUS_PASS: $(NEXUS_PASS)
+
+  - stage: DeployToAWS
+    jobs:
+      - job: Deploy
+        steps:
+          - script: |
+              unzip -o sam-09.09.2003.zip -d .
+              sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --stack-name aj-stack --capabilities CAPABILITY_IAM --region ap-southeast-1 --resolve-s3
+            displayName: 'Deploy to AWS'
