@@ -1,94 +1,67 @@
 trigger:
-  branches:
-    include:
-      - master
+- main  
 
 pool:
   vmImage: 'ubuntu-latest'
 
-variables:
-  id: 'AJagadish'
-  url: 'https://github.com/arj24092003/aws-sam.git'
-  branch: 'master'
-  NVM_DIR: '$(HOME)/.nvm'
+steps:
+- task: Checkout@1
+  displayName: 'Checkout code from GitHub'
+  inputs:
+    repository: self
+    persistCredentials: true
 
-stages:
-  - stage: CheckoutCode
-    jobs:
-      - job: Checkout
-        steps:
-          - task: Checkout@1
-            displayName: 'Checkout code'
-            inputs:
-              repository: 'self'
-              clean: true
-              persistCredentials: true
+- task: UsePythonVersion@0
+  displayName: 'Use Python 3.x'
+  inputs:
+    versionSpec: '3.x'
 
-  - stage: BuildProject
-    jobs:
-      - job: Build
-        steps:
-          - script: |
-              export NVM_DIR="$HOME/.nvm"
-              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-              nvm install 20
-              nvm use 20
-              which npm
-              npm -v
-              mkdir -p /tmp/sam-build
-              sam build --build-dir /tmp/sam-build
-            displayName: 'Build SAM application'
-          - script: 'zip -r build-aws.zip .aws-sam'
-            displayName: 'Archive build output'
+- script: |
+    pip install aws-sam-cli
+  displayName: 'Install AWS SAM CLI'
 
-  - stage: PushToNexus
-    jobs:
-      - job: Upload
-        steps:
-          - task: NexusUploader@1
-            displayName: 'Upload to Nexus'
-            inputs:
-              nexusVersion: 'nexus3'
-              protocol: 'http'
-              nexusUrl: '18.140.153.140:8081'
-              repository: 'buildartifacts'
-              groupId: 'artifacts'
-              version: '09.09.2003'
-              artifactId: 'sam'
-              classifier: ''
-              file: 'build-aws.zip'
-              type: 'zip'
+- script: |
+    sam build
+  displayName: 'Build SAM application'
 
-  - stage: ConfigureAWS
-    jobs:
-      - job: AWSConfigure
-        steps:
-          - script: |
-              aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
-              aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
-              aws configure set region "ap-southeast-1"
-            displayName: 'Configure AWS credentials'
-            env:
-              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
-              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+- script: |
+    zip -r aws-sam.zip .aws-sam
+  displayName: 'Zip the .aws-sam folder'
 
-  - stage: PullFromNexus
-    jobs:
-      - job: Download
-        steps:
-          - script: |
-              mkdir -p output-aws
-              curl -u $(NEXUS_USER):$(NEXUS_PASS) -O http://18.140.153.140:8081/repository/buildartifacts/artifacts/sam/09.09.2003/sam-09.09.2003.zip
-            displayName: 'Download from Nexus'
-            env:
-              NEXUS_USER: $(NEXUS_USER)
-              NEXUS_PASS: $(NEXUS_PASS)
+- task: Bash@3
+  displayName: 'Upload Zip to Nexus'
+  inputs:
+    targetType: 'inline'
+    script: |
+      curl -v -u $(nexus.NEXUS_USER):$(nexus.NEXUS_PASS) \
+      --upload-file aws-sam.zip \
+      $(nexus.NEXUS_URL)/repository/buildartifacts/aws-sam.zip
 
-  - stage: DeployToAWS
-    jobs:
-      - job: Deploy
-        steps:
-          - script: |
-              unzip -o sam-09.09.2003.zip -d .
-              sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --stack-name aj-stack --capabilities CAPABILITY_IAM --region ap-southeast-1 --resolve-s3
-            displayName: 'Deploy to AWS'
+- script: |
+    mkdir -p output
+  displayName: 'Create output folder'
+
+- script: |
+    curl -v -u $(nexus.NEXUS_USER):$(nexus.NEXUS_PASS) \
+    -o output/aws-sam.zip \
+    $(nexus.NEXUS_URL)/repository/buildartifacts/aws-sam.zip
+  displayName: 'Download zip from Nexus'
+
+- script: |
+    unzip output/aws-sam.zip -d output
+  displayName: 'Unzip the file into output folder'
+
+- script: |
+    aws configure set aws_access_key_id $(aws.AWS_ACCESS_KEY_ID)
+    aws configure set aws_secret_access_key $(aws.AWS_SECRET_ACCESS_KEY)
+    aws configure set default.region eu-north-1
+  displayName: 'Configure AWS CLI'
+
+- script: |
+    sam deploy \
+      --stack-name AJ-STK \
+      --capabilities CAPABILITY_IAM \
+      --region eu-north-1 \
+      --no-confirm-changeset \
+      --resolve-s3
+  displayName: 'Deploy SAM application'
